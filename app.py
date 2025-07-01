@@ -40,7 +40,7 @@ def generate_openai_response(prompt, model="gpt-3.5-turbo"):
         return f"❌ OpenAI API call failed: {e}"
 
 
-def search_by_bookname(query: str, bookname: str, top_k: int = 5):
+def search_by_bookname(query: str, bookname: str, top_k: int = 20):
     """
     Search the FAISS index for a query and return results filtered by bookname.
     
