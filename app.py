@@ -126,6 +126,64 @@ Below is a passage from a book, along with some metadata.
         "role": "As a teacher, provide a high-level summary...",
         "context": "Used by teachers aged 10–12.",
         "output": "Summarize themes and vocabulary..."
+    },
+    {
+        "id": "AI_Reviewer",
+        "name": "AI Reviewer",
+        "role": '''
+            You are an expert AI trained in parental content moderation. Analyze the following text carefully, including context, implications, and tone.
+
+    Please determine whether the content contains any direct or indirect references to the following categories:
+
+    1. Violence & Gore
+    2. Strong or Inappropriate Language
+    3. Sexual Content or Nudity
+
+    
+        ''',
+        "context": "Used by teachers aged 10–12.",
+        "output": ''' 
+        For each category, if relevant, provide:
+
+        [1] Relevance Judgment: Whether this category is present (Yes/No)
+
+        [2] Severity (1–10): Where 1 = mild and 10 = extremely explicit or disturbing
+
+        [3] Exact Quote(s): Short excerpt(s) from the text that triggered your judgment
+
+        [4] Explanation: Why the content is sensitive, with consideration for a 9-year-old reader
+
+        [5] Subtle Signals (Optional): Any indirect references (e.g. metaphors, tone shifts, implications) that may also suggest sensitivity
+
+    🔄 Repeat this structure for each category, even if not all are triggered.
+
+    ⛔ Important: Be thorough, neutral, and base your reasoning on both surface meaning and deeper emotional or psychological implications in the text.
+
+    🚸 This review is intended to assess content appropriateness for children under 10 years old.
+
+        
+        '''
+    },
+    {
+        "id": "bookreviewer",
+        "name": "Book Critic",
+        "role": "You are a book reviewer, very critically reading the book content to estimate with evidence (WHY) the book has content in categories 'violence and gore','language' and 'sex and nudity' ",
+        "context": "Used by teachers aged 10–12.",
+        "output": '''return your answer in structured format:
+        ------
+        Violence and Gore:<rate 1 to 10>,
+        Why_this rate for Violence and Gore:<summary of evidences>,
+        Evidence:"[Short excerpt triggering concern]",
+        Language:<rate 1 to 10>,
+        Why_this rate for Language:<summary of evidences>,
+        Evidence:"[Short excerpt triggering concern]",
+        Sex and nudity:<rate 1 to 10>,
+        Why_this rate for Sex and nudity:<summary of evidences>,
+        Evidence:"[Short excerpt triggering concern]"
+
+where 1 is least and 10 is highest
+        ------
+        '''
     }
 ]
 
@@ -142,6 +200,10 @@ standard_prompts = {
     "Anxiety": [
         "Are there sad or emotionally intense scenes?",
         "Could this book be disturbing for sensitive children?"
+    ],
+    "Critics":[
+        "Are there topics related directly or indirectly about 'violence & gore' or 'language' or 'sex and nudity'?",
+        ""
     ]
 }
 
