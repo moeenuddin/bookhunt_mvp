@@ -1,19 +1,124 @@
 import streamlit as st
 
-# --- Dummy Data Sets ---
-books = [
-    "The Great Gatsby", "1984", "To Kill a Mockingbird",
-    "Pride and Prejudice", "Moby Dick", "War and Peace",
-    "The Odyssey", "A Tale of Two Cities", "The Catcher in the Rye"
-]
+import os
+
+from langchain_community.vectorstores import FAISS
+from langchain_community.embeddings import HuggingFaceEmbeddings
+
+import os
+import openai
+
+#os.getenv("OPENAI_API_KEY")
+api_key = st.secrets["openai"]["api_key"]
+
+INDEX_DIR = "faiss_index"
+MODEL_NAME = "all-MiniLM-L6-v2"
+
+# Load embedding and vectorstore only once
+embedding = HuggingFaceEmbeddings(model_name=MODEL_NAME)
+vectordb = FAISS.load_local(INDEX_DIR, embedding, allow_dangerous_deserialization=True)
+
+import openai
+from openai import OpenAI
+import os
+
+client = OpenAI(api_key=api_key)
+
+def generate_openai_response(prompt, model="gpt-3.5-turbo"):
+    try:
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant analyzing children's books."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.7,
+            max_tokens=2000,
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"❌ OpenAI API call failed: {e}"
+
+
+def search_by_bookname(query: str, bookname: str, top_k: int = 5):
+    """
+    Search the FAISS index for a query and return results filtered by bookname.
+    
+    Args:
+        query (str): The search query.
+        bookname (str): The book name to filter by (from metadata).
+        top_k (int): Number of final results to return after filtering.
+
+    Returns:
+        List[Document]: A list of filtered LangChain Document objects.
+    """
+    try:
+        # Search top 20 documents
+        results = vectordb.similarity_search(query, k=20)
+
+        # Filter results based on bookname metadata
+        filtered = [
+            doc for doc in results
+            if doc.metadata.get("bookname") == bookname
+        ][:top_k]
+
+        return filtered
+
+    except Exception as e:
+        print(f"❌ Search failed: {e}")
+        return []
+
+
+BOOKS_DIR = "books"
+
+@st.cache_data
+def get_books_from_directory():
+    if not os.path.exists(BOOKS_DIR):
+        return []
+    return [
+        os.path.splitext(f)[0]
+        for f in os.listdir(BOOKS_DIR)
+        if f.endswith(".txt")
+    ]
+
+books = get_books_from_directory()
+
+
 
 templates = [
     {
         "id": "parent_filter",
         "name": "Parental Sensitivity Review",
-        "role": "As a parent, you have to analyze the following book(s)...",
+        "role": '''  You are a parental content advisor AI reviewing parts of a book to detect content that may not be appropriate for a 9-year-old child.
+
+Below is a passage from a book, along with some metadata.
+
+''',
         "context": "Ensure it's age-appropriate for under 10.",
-        "output": "Highlight sensitive terms (rating > 1)..."
+        "output_old": "Highlight sensitive terms (rating > 1)...",
+        "output":'''
+        Return your findings in **structured numbered bullet points**, not in JSON. The output should be easy to read for parents and educators.
+
+---
+
+### FORMAT:
+
+**Sensitive Topics Detected:**
+
+1. **Topic:** [Type of sensitivity, e.g., "Emotional Distress"]  
+   **Quote:** "[Short excerpt triggering concern]"  
+   **Location:** Chapter [X], Page [Y], Chunk [Z]  
+   **Reason:** [Brief explanation of why this is considered sensitive for a 9-year-old]
+
+2. **Topic:** ...
+
+---
+
+**Summary of Findings:**  
+[2–3 sentence high-level summary of the content review — e.g., "This section contains mild emotional distress that may affect sensitive readers. No explicit or violent content was found."]
+
+---
+'''
     },
     {
         "id": "teacher_summary",
@@ -103,6 +208,28 @@ with tab1:
 
     if submit and user_input.strip():
         full_query = user_input.strip()
+        query=user_input
+        book =None 
+        if len(st.session_state.selected_books):
+            book=st.session_state.selected_books[0] # 1 book
+        matches = search_by_bookname(query, book)
+        context=[]
+
+        if matches:
+            st.subheader("🔎 Top Matching Chunks")
+            for i, doc in enumerate(matches, 1):
+                st.markdown(f"### 🔹 Result {i}")
+                st.markdown(f"📘 **Book:** `{doc.metadata.get('bookname')}`")
+                st.markdown(f"📄 **Page:** `{doc.metadata.get('page')}`, **Chunk:** `{doc.metadata.get('chunk_number')}`")
+                st.markdown(f"📝 {doc.page_content[:500]}{'...' if len(doc.page_content) > 500 else ''}")
+                st.markdown("---")
+                context.append(f" **Page:** `{doc.metadata.get('page')}`, **Chunk:** `{doc.metadata.get('chunk_number')}`"+doc.page_content+"\n")
+        else:
+            st.warning("No matching results found for the selected book.")
+        
+        #print md
+        st.markdown(" ".join(context))
+
 
         # Append book and template info
         if st.session_state.selected_books:
@@ -110,13 +237,19 @@ with tab1:
         if st.session_state.selected_template:
             full_query = (
                 f"🧠 Role: {st.session_state.selected_template['role']}\n"
-                f"🎯 Output: {st.session_state.selected_template['output']}\n\n"
-                + full_query
+                + "   ".join(context)
+                +f"🎯 Output in format: {st.session_state.selected_template['output']}\n\n"
+                #+ full_query
+                + user_input.strip()
             )
 
         # Simulated response
         st.session_state.chat_history.append(("user", user_input.strip()))
-        st.session_state.chat_history.append(("bot", f"📝 **Prepared Query (Not sent)**\n\n{full_query}"))
+        #st.session_state.chat_history.append(("bot", f"📝 **Prepared Query (Not sent)**\n\n{full_query}"))
+        final_prompt = full_query
+        # 🔥 OpenAI Response
+        response = generate_openai_response(final_prompt)
+        st.session_state.chat_history.append(("bot", f"📝 **Response 3.5 turbo **\n\n{response}"))
 
     # Display chat history
     for speaker, message in st.session_state.chat_history:
