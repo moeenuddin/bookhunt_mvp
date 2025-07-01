@@ -191,7 +191,8 @@ standard_prompts = {
     "Violence": [
         "Does this book contain scenes of physical violence?",
         "Is there any mention of weapons, war, or fighting?",
-        "Are there instances of bullying or abuse?"
+        "Are there instances of bullying or abuse?",
+        "Does this book contain scenes of violence & gore, instances of language, and events of sex & nudity?"
     ],
     "Romance": [
         "Is there romantic content in this book?",
